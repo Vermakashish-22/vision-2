@@ -3,6 +3,8 @@ from flask_socketio import SocketIO, join_room, emit, leave_room
 import uuid
 from flask_cors import CORS
 import eventlet
+import deepface
+from utils import decode_base64_image, detect_face
 
 eventlet.monkey_patch()
 
@@ -106,6 +108,49 @@ def handle_leave(data):
     socketio.emit("user-disconnected", sid, room=room)
     socketio.emit("update-users", rooms.get(room, {}), room=room)
 
+
+@socketio.on("analyze-frame")
+def analyze_frame(data):
+
+    print("Frame received")
+
+    image_data = data["image"]
+    user = data.get("user", request.sid)
+
+    image = decode_base64_image(image_data)
+
+    from deepface import DeepFace
+
+    result = DeepFace.analyze(
+        image,
+        actions=['emotion'],
+        enforce_detection=False
+    )
+
+    if isinstance(result, list):
+        emotion = result[0]["dominant_emotion"]
+    else:
+        emotion = result["dominant_emotion"]
+
+    print("Detected emotion:", emotion)
+
+    face_present = detect_face(image)
+
+    focus = 85 if face_present else 20
+    distraction = 100 - focus
+
+    socketio.emit(
+        "emotion-result",
+        {
+            "user": data.get("user", request.sid),
+            "emotion": emotion,
+            "focus": focus,
+            "distraction": distraction
+        },
+        room=data["room"],
+        include_self=True
+    )
+    
 
 @socketio.on("disconnect")
 def on_disconnect():

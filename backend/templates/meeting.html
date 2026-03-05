@@ -36,6 +36,15 @@ padding-bottom: env(safe-area-inset-bottom);
 
 /* Extra spacing on small screens */
 
+.ai-overlay{
+animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn{
+from{opacity:0; transform:translateY(-5px)}
+to{opacity:1; transform:translateY(0)}
+}
+
 .control-btn{
 width:44px;
 height:44px;
@@ -114,8 +123,7 @@ class="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded hover:bg-slate-700
 <!-- VIDEO GRID -->
 
 <div id="video-grid"
-class="flex-1 p-3 md:p-6 grid gap-3 md:gap-4 place-items-center overflow-y-auto"
-style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+class="flex-1 p-4 flex flex-wrap justify-center items-center gap-4 overflow-y-auto">
 </div>
 
 <!-- PARTICIPANT SIDEBAR -->
@@ -206,6 +214,8 @@ const micBtn=document.getElementById("micBtn")
 const camBtn=document.getElementById("camBtn")
 const leaveBtn=document.getElementById("leaveBtn")
 const screenBtn=document.getElementById("screenBtn")
+const IS_HOST = new URLSearchParams(window.location.search).get("host") === "true"
+let distractionCount = {}
 
 let micEnabled=true
 let camEnabled=true
@@ -256,11 +266,13 @@ socket.emit("join-room",{room:ROOM_ID,name:USER_NAME})
 socket.emit("get-users")
 
 startSpeakerDetection()
+startRealtimeAnalysis()
 
 }
 
-startCamera()
-
+socket.on("connect", () => {
+    startCamera()
+})
 
 /* ADD VIDEO TILE */
 
@@ -272,7 +284,10 @@ const tile=document.createElement("div")
 tile.id="tile-"+id
 
 tile.className =
-"video-tile bg-slate-900 border border-slate-800 rounded-xl overflow-hidden relative flex items-center justify-center aspect-video w-full max-w-[720px] min-h-[220px]"
+"video-tile bg-slate-900 border border-slate-800 rounded-xl overflow-hidden relative flex items-center justify-center"
+tile.style.flex = "1 1 420px"
+tile.style.maxWidth = "600px"
+tile.style.aspectRatio = "16/9"
 
 const video=document.createElement("video")
 
@@ -298,11 +313,30 @@ video.play()
 }
 
 grid.appendChild(tile)
-
+adjustTileSizes()
 updateLayout()
 
 }
 
+function adjustTileSizes(){
+
+const tiles = document.querySelectorAll(".video-tile")
+const count = tiles.length
+
+let basis = "420px"
+
+if(count === 1) basis = "70%"
+else if(count === 2) basis = "45%"
+else if(count === 3) basis = "40%"
+else if(count === 4) basis = "35%"
+else if(count <= 6) basis = "30%"
+else basis = "25%"
+
+tiles.forEach(tile=>{
+tile.style.flex = `1 1 ${basis}`
+})
+
+}
 
 
 /* PARTICIPANTS */
@@ -515,7 +549,7 @@ const p=document.getElementById("p-"+id)
 if(p) p.remove()
 
 updateLayout()
-
+adjustTileSizes()
 })
 
 
@@ -655,6 +689,28 @@ sender.replaceTrack(camTrack)
 }
 
 
+function playBeep(){
+
+const ctx = new AudioContext()
+const oscillator = ctx.createOscillator()
+const gain = ctx.createGain()
+
+oscillator.connect(gain)
+gain.connect(ctx.destination)
+
+oscillator.frequency.value = 700
+oscillator.type = "sine"
+
+oscillator.start()
+
+gain.gain.setValueAtTime(0.2, ctx.currentTime)
+gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25)
+
+oscillator.stop(ctx.currentTime + 0.25)
+
+}
+
+
 /* ACTIVE SPEAKER DETECTION */
 
 function startSpeakerDetection(){
@@ -688,6 +744,125 @@ detect()
 
 }
 
+function startRealtimeAnalysis(){
+
+setInterval(()=>{
+
+const tile = document.getElementById("tile-"+socket.id)
+
+if(!tile) return
+
+const video = tile.querySelector("video")
+
+if(!video || video.readyState !== 4) return
+
+const canvas = document.createElement("canvas")
+canvas.width = 320
+canvas.height = 240
+
+const ctx = canvas.getContext("2d")
+ctx.drawImage(video,0,0,320,240)
+
+const frame = canvas.toDataURL("image/jpeg")
+
+socket.emit("analyze-frame",{
+    image: frame,
+    room: ROOM_ID,
+    user: socket.id
+})
+
+},2500)
+
+}
+
+function getEmotionEmoji(emotion){
+
+const map = {
+happy:"😄",
+sad:"😔",
+angry:"😡",
+fear:"😨",
+surprise:"😲",
+neutral:"😐",
+disgust:"🤢"
+}
+
+return map[emotion] || "🙂"
+}
+
+
+socket.on("emotion-result",(data)=>{
+
+const tile = document.getElementById("tile-"+data.user)
+
+if(!tile) return
+
+let overlay = tile.querySelector(".ai-overlay")
+
+if(!overlay){
+
+overlay = document.createElement("div")
+overlay.className =
+"ai-overlay absolute top-3 left-3 backdrop-blur-md bg-black/60 border border-white/10 text-white text-xs px-3 py-2 rounded-xl shadow-lg"
+
+tile.appendChild(overlay)
+
+}
+
+if(!distractionCount[data.user]){
+distractionCount[data.user] = 0
+}
+
+if(data.distraction > 60){
+
+distractionCount[data.user]++
+
+if(!IS_HOST && data.user === socket.id){
+
+playBeep()
+
+}
+
+}
+
+overlay.innerHTML = `
+<div class="flex flex-col gap-1">
+
+<div class="text-[10px] text-cyan-400 flex items-center gap-1">
+<span class="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse"></span>
+AI Insight
+</div>
+
+<div class="flex items-center gap-1 text-sm">
+🧠 <span class="font-semibold">${data.emotion}</span>
+</div>
+
+<div class="flex items-center gap-2 text-xs">
+<span>Focus</span>
+<div class="w-20 h-1 bg-slate-700 rounded">
+<div style="width:${data.focus}%" class="h-1 bg-green-400 rounded"></div>
+</div>
+<span>${data.focus}%</span>
+</div>
+
+<div class="flex items-center gap-2 text-xs">
+<span>Distract</span>
+<div class="w-20 h-1 bg-slate-700 rounded">
+<div style="width:${data.distraction}%" class="h-1 bg-red-400 rounded"></div>
+</div>
+<span>${data.distraction}%</span>
+</div>
+
+<div class="text-[10px] text-red-400">
+⚠ Distractions: ${distractionCount[data.user]}
+</div>
+
+</div>
+`
+
+})
+
+
 
 /* LEAVE */
 
@@ -703,6 +878,7 @@ socket.disconnect()
 window.location="http://localhost:5173/dashboard"
 
 }
+
 
 </script>
 
