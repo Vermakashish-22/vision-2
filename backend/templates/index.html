@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<title>Create Meeting</title>
+
+</head>
+
+<body class="min-h-screen bg-slate-950 flex items-center justify-center p-4 text-white">
+
+<!-- Ambient glow -->
+
+<div class="fixed inset-0 pointer-events-none overflow-hidden">
+
+<div class="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-cyan-500/10 blur-[120px]"></div>
+
+</div>
+
+<div class="relative w-full max-w-lg">
+
+<!-- Back button -->
+
+<button
+onclick="Dashboard()"
+class="flex items-center gap-2 text-slate-400 hover:text-white transition mb-6 text-sm">
+
+<i data-lucide="arrow-left" class="w-4 h-4"></i>
+Back to Dashboard
+
+</button>
+
+
+<!-- Main card -->
+
+<div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl">
+
+<!-- Header -->
+
+<div class="flex items-center gap-4 mb-8">
+
+<div class="w-14 h-14 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+
+<i data-lucide="video" class="w-6 h-6 text-cyan-400"></i>
+
+</div>
+
+<div>
+
+<h1 class="text-2xl font-bold">
+New Meeting
+</h1>
+
+<p class="text-sm text-slate-400">
+Share the link below to invite others
+</p>
+
+</div>
+
+</div>
+
+
+<!-- Meeting Code -->
+
+<div class="mb-6">
+
+<label class="text-xs uppercase text-slate-400 mb-2 block">
+Meeting Code
+</label>
+
+<div class="bg-slate-800 border border-cyan-500/20 rounded-xl p-4 text-center">
+
+<span
+id="meetingCode"
+class="font-mono text-3xl font-bold tracking-[0.3em] text-cyan-400">
+</span>
+
+</div>
+
+</div>
+
+
+<!-- Meeting Link -->
+
+<div class="mb-8">
+
+<label class="text-xs uppercase text-slate-400 mb-2 block">
+Meeting Link
+</label>
+
+<div class="flex items-center gap-2">
+
+<div
+class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 flex items-center gap-2 overflow-hidden">
+
+<i data-lucide="link" class="w-4 h-4 text-cyan-400"></i>
+
+<span
+id="meetingLink"
+class="text-sm text-slate-400 truncate font-mono">
+</span>
+
+</div>
+
+<button
+onclick="copyLink()"
+id="copyBtn"
+class="h-[46px] w-[46px] flex items-center justify-center rounded-lg bg-slate-800 border border-slate-700 hover:border-cyan-400 transition">
+
+<i data-lucide="copy" class="w-4 h-4"></i>
+
+</button>
+
+</div>
+
+</div>
+
+
+<!-- Security note -->
+
+<div class="flex items-center gap-2 text-xs text-slate-400 mb-8">
+
+<i data-lucide="shield" class="w-4 h-4 text-cyan-400"></i>
+
+<span>
+End-to-end encrypted · Only people with the link can join
+</span>
+
+</div>
+
+
+<!-- Buttons -->
+
+<div class="flex flex-col gap-3">
+
+<button
+onclick="createMeeting()"
+class="w-full h-12 bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded-xl flex items-center justify-center gap-2">
+
+<i data-lucide="video" class="w-5 h-5"></i>
+Create & Join Meeting
+
+</button>
+
+
+<button
+onclick="copyLink()"
+class="w-full text-slate-400 hover:text-white flex items-center justify-center gap-2">
+
+<i data-lucide="copy" class="w-4 h-4"></i>
+
+<span id="copyText">Copy Link Instead</span>
+
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+
+<script>
+
+lucide.createIcons()
+
+/* generate meeting code */
+
+const meetingCode = "FMT-" + Math.floor(1000 + Math.random()*9000)
+
+document.getElementById("meetingCode").innerText = meetingCode
+
+const BASE_URL =
+window.location.hostname === "localhost"
+? "https://juan-exopathic-dayfly.ngrok-free.dev"
+: window.location.origin
+
+const meetingLink = BASE_URL + "/meeting/" + meetingCode + "?host=true"
+
+document.getElementById("meetingLink").innerText = meetingLink
+
+/* copy link */
+
+function copyLink(){
+
+navigator.clipboard.writeText(meetingLink)
+
+document.getElementById("copyText").innerText="Copied!"
+
+setTimeout(()=>{
+document.getElementById("copyText").innerText="Copy Link Instead"
+},2000)
+
+}
+
+
+/* create meeting */
+
+function createMeeting(){
+
+window.location.href =
+BASE_URL + "/meeting/" + meetingCode + "?host=true"
+
+}
+
+
+/* go dashboard */
+
+function goDashboard(){
+
+window.location.href="/dashboard"
+
+}
+
+</script>
+
+</body>
+</html>

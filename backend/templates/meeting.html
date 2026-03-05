@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<title>FaceMeet Meeting</title>
+
+</head>
+<style>
+
+#video-grid{
+height:100%;
+overflow-y:auto;
+align-content:flex-start;
+}
+
+/* smooth scroll */
+#video-grid::-webkit-scrollbar{
+width:6px;
+}
+
+#video-grid::-webkit-scrollbar-thumb{
+background:#334155;
+border-radius:10px;
+}
+
+.pb-safe{
+padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Extra spacing on small screens */
+
+.control-btn{
+width:44px;
+height:44px;
+border-radius:999px;
+background:#1e293b;
+display:flex;
+align-items:center;
+justify-content:center;
+transition: all 0.2s ease;
+}
+
+.control-btn:hover{
+background:#334155;
+}
+
+.control-btn svg{
+width:20px;
+height:20px;
+}
+
+
+.control-btn:active{
+transform:scale(0.9);
+}
+
+@media (max-width:640px){
+
+#controlBar{
+bottom:12px;
+border-radius:16px;
+margin:0 12px;
+}
+
+}
+</style>
+
+<body class="h-screen bg-black text-white flex flex-col overflow-hidden">
+
+<!-- TOP BAR -->
+
+<div class="h-14 flex items-center justify-between px-6 border-b border-slate-800">
+
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 bg-cyan-500/10 flex items-center justify-center rounded">
+📹
+</div>
+<span class="font-semibold">Face<span class="text-cyan-400">Meet</span></span>
+</div>
+
+<div class="flex items-center gap-4 text-sm">
+
+<div class="flex items-center gap-1 text-green-400">
+<span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+Live
+</div>
+
+<button id="participantsBtn"
+class="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded hover:bg-slate-700">
+
+👥
+<span id="participantsCount">1</span>
+
+</button>
+
+</div>
+
+</div>
+
+
+<!-- MAIN AREA -->
+
+<div class="flex flex-1 overflow-hidden">
+
+<!-- VIDEO GRID -->
+
+<div id="video-grid"
+class="flex-1 p-3 md:p-6 grid gap-3 md:gap-4 place-items-center overflow-y-auto"
+style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+</div>
+
+<!-- PARTICIPANT SIDEBAR -->
+
+<div id="participantsPanel"
+class="w-72 bg-slate-900 border-l border-slate-800 p-4 hidden rounded-xl flex-col">
+
+<div class="flex justify-between items-center mb-4">
+
+<h3 class="font-semibold text-lg">
+Participants
+</h3>
+
+<button id="closeParticipants">✖</button>
+
+</div>
+
+<div id="participantsList" class="space-y-3 rounded-xl text-sm"></div>
+
+</div>
+
+</div>
+
+
+<!-- CONTROLS -->
+
+<div id="controlBar"
+class="fixed bottom-3 left-0 right-0 md:relative
+flex items-center justify-center gap-3
+bg-black backdrop-blur-lg
+border border-black/50
+rounded-2xl md:rounded-none
+p-2 md:p-0 md:bg-black md:border-0">
+
+<button id="micBtn"
+class="control-btn">
+<i data-lucide="mic"></i>
+</button>
+
+<button id="camBtn"
+class="control-btn">
+<i data-lucide="video"></i>
+</button>
+
+<button id="screenBtn"
+class="control-btn">
+<i data-lucide="monitor-up"></i>
+</button>
+
+<button class="control-btn">
+<i data-lucide="hand"></i>
+</button>
+
+<button class="control-btn">
+<i data-lucide="message-circle"></i>
+</button>
+
+<button id="participantsBtn"
+class="control-btn">
+<i data-lucide="users"></i>
+</button>
+
+<div class="w-px h-8 bg-slate-700 mx-1"></div>
+
+<button id="leaveBtn"
+class="control-btn bg-red-600 hover:bg-red-500">
+<i data-lucide="phone-off"></i>
+</button>
+
+</div>
+
+
+<script>
+
+const ROOM_ID="{{room_id}}"
+// const USER_NAME="{{username}}"
+
+const socket = io()
+let users={}
+
+const peers={}
+let localStream=null
+
+const grid=document.getElementById("video-grid")
+const participantsList=document.getElementById("participantsList")
+
+const micBtn=document.getElementById("micBtn")
+const camBtn=document.getElementById("camBtn")
+const leaveBtn=document.getElementById("leaveBtn")
+const screenBtn=document.getElementById("screenBtn")
+
+let micEnabled=true
+let camEnabled=true
+
+let USER_NAME = localStorage.getItem("meet_name")
+
+if(!USER_NAME){
+
+USER_NAME = prompt("Enter your name")
+
+localStorage.setItem("meet_name", USER_NAME)
+
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    lucide.createIcons()
+})
+
+const participantsBtn = document.getElementById("participantsBtn")
+const participantsPanel = document.getElementById("participantsPanel")
+const closeParticipants = document.getElementById("closeParticipants")
+
+participantsBtn.onclick = () => {
+participantsPanel.classList.remove("hidden")
+participantsPanel.classList.add("flex")
+}
+
+closeParticipants.onclick = () => {
+participantsPanel.classList.add("hidden")
+}
+
+
+/* START CAMERA */
+
+async function startCamera(){
+
+localStream = await navigator.mediaDevices.getUserMedia({
+video:true,
+audio:true
+})
+
+addVideo(localStream, socket.id, USER_NAME, true)
+
+addParticipant(socket.id, USER_NAME)
+
+socket.emit("join-room",{room:ROOM_ID,name:USER_NAME})
+
+socket.emit("get-users")
+
+startSpeakerDetection()
+
+}
+
+startCamera()
+
+
+/* ADD VIDEO TILE */
+
+function addVideo(stream,id,name,isSelf=false){
+
+if(document.getElementById("tile-"+id)) return
+
+const tile=document.createElement("div")
+tile.id="tile-"+id
+
+tile.className =
+"video-tile bg-slate-900 border border-slate-800 rounded-xl overflow-hidden relative flex items-center justify-center aspect-video w-full max-w-[720px] min-h-[220px]"
+
+const video=document.createElement("video")
+
+video.srcObject=stream
+video.autoplay=true
+video.playsInline=true
+video.muted=isSelf
+video.className="w-full h-full object-cover"
+
+tile.appendChild(video)
+
+const label=document.createElement("div")
+label.className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs"
+
+if(isSelf)
+label.innerText="You"
+else
+label.innerText=name
+
+tile.appendChild(label)
+video.onloadedmetadata = () => {
+video.play()
+}
+
+grid.appendChild(tile)
+
+updateLayout()
+
+}
+
+
+
+/* PARTICIPANTS */
+
+function addParticipant(id,name){
+
+if(document.getElementById("p-"+id)) return
+
+const item=document.createElement("div")
+item.id="p-"+id
+
+item.className="flex items-center justify-between bg-slate-800 p-2 rounded"
+
+item.innerHTML=`
+  <div class="flex items-center gap-2">
+    <div class="w-8 h-8 rounded-full bg-cyan-500 flex items-center justify-center text-xs">
+    ${name[0]}
+    </div>
+    ${name}
+  </div>
+
+  <div class="text-xs text-slate-400">
+  🎤 📷
+  </div>
+`
+
+participantsList.appendChild(item)
+
+}
+
+
+/* WEBRTC PEER */
+
+function createPeer(userId){
+
+const peer=new RTCPeerConnection({
+iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+})
+
+peer.ontrack = e => {
+
+const stream = e.streams[0]
+
+const name = users[userId] || "Participant"
+
+addVideo(stream, userId, name)
+
+}
+
+peer.onicecandidate=e=>{
+if(e.candidate){
+socket.emit("ice-candidate",{target:userId,candidate:e.candidate})
+}
+}
+
+return peer
+
+}
+
+
+socket.on("update-users", userMap => {
+
+users = userMap
+
+participantsList.innerHTML=""
+
+const ids = Object.keys(users)
+
+document.getElementById("participantsCount").innerText = ids.length
+
+const hostId = ids[0]   // first user = host
+
+ids.forEach(id => {
+
+const name = users[id]
+
+const isHost = id === hostId
+
+const item=document.createElement("div")
+
+item.className="flex items-center justify-between bg-slate-800 p-2 rounded"
+
+item.innerHTML=`
+<div class="flex items-center gap-2">
+
+<div class="w-8 h-8 rounded-full bg-cyan-500 flex items-center justify-center text-xs">
+${name.charAt(0).toUpperCase()}
+</div>
+
+<div class="flex flex-col">
+
+<span class="text-sm">
+${name} ${id===socket.id ? "(You)" : ""}
+</span>
+
+${isHost ? '<span class="text-xs text-cyan-400">Host</span>' : ''}
+
+</div>
+
+</div>
+
+<div class="text-xs text-slate-400">
+🎤 📷
+</div>
+`
+
+participantsList.appendChild(item)
+
+})
+
+})
+
+
+socket.on("existing-users", async userList => {
+
+userList.forEach(async user => {
+
+if(user.id === socket.id) return
+
+const peer = createPeer(user.id)
+peers[user.id] = peer
+
+localStream.getTracks().forEach(track=>{
+peer.addTrack(track, localStream)
+})
+
+const offer = await peer.createOffer()
+await peer.setLocalDescription(offer)
+
+socket.emit("offer", {
+target: user.id,
+offer: offer
+})
+
+})
+
+})
+
+
+/* USER CONNECTED */
+
+socket.on("user-connected",async user=>{
+
+addParticipant(user.id,user.name)
+
+const peer=createPeer(user.id)
+peers[user.id]=peer
+
+localStream.getTracks().forEach(track=>{
+peer.addTrack(track,localStream)
+})
+
+const offer=await peer.createOffer()
+await peer.setLocalDescription(offer)
+
+socket.emit("offer",{target:user.id,offer})
+
+})
+
+
+/* OFFER */
+
+socket.on("offer",async data=>{
+
+const peer=createPeer(data.from)
+peers[data.from]=peer
+
+await peer.setRemoteDescription(data.offer)
+
+localStream.getTracks().forEach(track=>{
+peer.addTrack(track,localStream)
+})
+
+const answer=await peer.createAnswer()
+await peer.setLocalDescription(answer)
+
+socket.emit("answer",{target:data.from,answer})
+
+})
+
+
+/* ANSWER */
+
+socket.on("answer",async data=>{
+if(peers[data.from])
+await peers[data.from].setRemoteDescription(data.answer)
+})
+
+
+/* ICE */
+
+socket.on("ice-candidate",async data=>{
+if(peers[data.from])
+await peers[data.from].addIceCandidate(data.candidate)
+})
+
+
+/* USER LEFT */
+
+socket.on("user-disconnected",id=>{
+
+if(peers[id]) peers[id].close()
+
+delete peers[id]
+
+const tile=document.getElementById("tile-"+id)
+if(tile) tile.remove()
+
+const p=document.getElementById("p-"+id)
+if(p) p.remove()
+
+updateLayout()
+
+})
+
+
+/* MIC TOGGLE */
+
+micBtn.onclick = () => {
+
+micEnabled = !micEnabled
+
+localStream.getAudioTracks().forEach(track=>{
+track.enabled = micEnabled
+})
+
+const icon = micBtn.querySelector("svg")
+
+if(micEnabled){
+icon.setAttribute("data-lucide","mic")
+micBtn.classList.remove("bg-red-600")
+}
+else{
+icon.setAttribute("data-lucide","mic-off")
+micBtn.classList.add("bg-red-600")
+}
+
+lucide.createIcons()
+
+
+}
+
+
+/* CAMERA TOGGLE */
+
+camBtn.onclick = () => {
+
+camEnabled = !camEnabled
+
+localStream.getVideoTracks().forEach(track=>{
+track.enabled = camEnabled
+})
+
+const icon = camBtn.querySelector("svg")
+
+if(camEnabled){
+icon.setAttribute("data-lucide","video")
+camBtn.classList.remove("bg-red-600")
+}
+else{
+icon.setAttribute("data-lucide","video-off")
+camBtn.classList.add("bg-red-600")
+}
+
+lucide.createIcons()
+
+}
+
+function updateLayout(){
+
+const tiles = document.querySelectorAll(".video-tile")
+const count = tiles.length
+
+if(count === 1){
+
+grid.style.gridTemplateColumns = "1fr"
+
+}
+
+else if(count === 2){
+
+grid.style.gridTemplateColumns = "1fr 1fr"
+
+}
+
+else if(count === 3){
+
+grid.style.gridTemplateColumns = "1fr 1fr"
+tiles[2].style.gridColumn = "span 2"
+
+}
+
+else if(count === 4){
+
+grid.style.gridTemplateColumns = "1fr 1fr"
+
+}
+
+else if(count <= 6){
+
+grid.style.gridTemplateColumns = "1fr 1fr 1fr"
+
+}
+
+else{
+
+grid.style.gridTemplateColumns = "repeat(auto-fit,minmax(280px,1fr))"
+
+}
+
+}
+
+/* SCREEN SHARE */
+
+screenBtn.onclick=async()=>{
+
+const screenStream=await navigator.mediaDevices.getDisplayMedia({
+video:true
+})
+
+const track=screenStream.getVideoTracks()[0]
+
+Object.values(peers).forEach(peer=>{
+
+const sender=peer.getSenders().find(s=>s.track.kind==="video")
+
+sender.replaceTrack(track)
+
+})
+
+track.onended=()=>{
+replaceCamera()
+}
+
+}
+
+
+function replaceCamera(){
+
+const camTrack=localStream.getVideoTracks()[0]
+
+Object.values(peers).forEach(peer=>{
+
+const sender=peer.getSenders().find(s=>s.track.kind==="video")
+
+sender.replaceTrack(camTrack)
+
+})
+
+}
+
+
+/* ACTIVE SPEAKER DETECTION */
+
+function startSpeakerDetection(){
+
+const ctx=new AudioContext()
+const analyser=ctx.createAnalyser()
+const mic=ctx.createMediaStreamSource(localStream)
+
+mic.connect(analyser)
+
+const data=new Uint8Array(analyser.frequencyBinCount)
+
+function detect(){
+
+analyser.getByteFrequencyData(data)
+
+const volume=data.reduce((a,b)=>a+b)/data.length
+
+const tile=document.getElementById("tile-"+socket.id)
+
+if(volume>35)
+tile.style.boxShadow="0 0 0 4px #22c55e"
+else
+tile.style.boxShadow="none"
+
+requestAnimationFrame(detect)
+
+}
+
+detect()
+
+}
+
+
+/* LEAVE */
+
+leaveBtn.onclick=()=>{
+
+if(localStream)
+localStream.getTracks().forEach(t=>t.stop())
+
+Object.values(peers).forEach(p=>p.close())
+
+socket.disconnect()
+
+window.location="/"
+
+}
+
+</script>
+
+</body>
+</html>
