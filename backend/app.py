@@ -7,6 +7,7 @@ import eventlet
 eventlet.monkey_patch()
 
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
