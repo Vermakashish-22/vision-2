@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>FaceMeet AI Report</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#0f172a;
+color:white;
+padding:30px;
+}
+
+.card{
+background:#1e293b;
+padding:20px;
+border-radius:10px;
+margin-bottom:25px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:15px;
+}
+
+th,td{
+padding:10px;
+border-bottom:1px solid #334155;
+text-align:center;
+}
+
+button{
+background:#06b6d4;
+border:none;
+padding:10px 20px;
+border-radius:6px;
+color:white;
+font-weight:bold;
+cursor:pointer;
+}
+
+button:hover{
+background:#0891b2;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>FaceMeet AI Meeting Report</h1>
+
+<div class="card">
+
+<h3>Meeting Summary</h3>
+
+<p><b>Room ID:</b> {{room_id}}</p>
+<p><b>Total Participants:</b> {{analytics|length}}</p>
+
+</div>
+
+
+<div class="card">
+
+<h3>Participant Performance</h3>
+
+<table>
+
+<thead>
+<tr>
+<th>Participant</th>
+<th>Avg Focus %</th>
+<th>Avg Distraction %</th>
+<th>Dominant Emotion</th>
+</tr>
+</thead>
+
+<tbody id="participantTable"></tbody>
+
+</table>
+
+</div>
+
+
+<div class="card">
+
+<h3>Focus Analysis</h3>
+<canvas id="focusChart"></canvas>
+
+</div>
+
+
+<div class="card">
+
+<h3>Distraction Analysis</h3>
+<canvas id="distractionChart"></canvas>
+
+</div>
+
+
+<div class="card">
+
+<h3>Emotion Distribution</h3>
+<canvas id="emotionChart"></canvas>
+
+</div>
+
+
+<div style="margin-top:30px">
+
+<button onclick="downloadReport()">
+Download Report
+</button>
+
+</div>
+
+
+<script>
+
+const analytics = JSON.parse('{{ analytics | tojson | safe }}');
+
+const participants = Object.keys(analytics)
+
+const avgFocus = []
+const avgDistraction = []
+
+const emotionCount = {}
+
+const table = document.getElementById("participantTable")
+
+participants.forEach(user=>{
+
+let f = analytics[user].focus || []
+let d = analytics[user].distraction || []
+let emotions = analytics[user].emotion || []
+
+let focusAvg = f.length ? f.reduce((a,b)=>a+b,0)/f.length : 0
+let disAvg = d.length ? d.reduce((a,b)=>a+b,0)/d.length : 0
+
+avgFocus.push(focusAvg)
+avgDistraction.push(disAvg)
+
+/* emotion counting */
+
+const emoMap = {}
+
+emotions.forEach(e=>{
+emoMap[e] = (emoMap[e] || 0) + 1
+emotionCount[e] = (emotionCount[e] || 0) + 1
+})
+
+let dominantEmotion = "neutral"
+
+let max = 0
+
+for(const e in emoMap){
+if(emoMap[e] > max){
+max = emoMap[e]
+dominantEmotion = e
+}
+}
+
+/* table row */
+
+table.innerHTML += `
+<tr>
+<td>${user}</td>
+<td>${focusAvg.toFixed(1)}</td>
+<td>${disAvg.toFixed(1)}</td>
+<td>${dominantEmotion}</td>
+</tr>
+`
+
+})
+
+
+/* Focus Chart */
+
+new Chart(document.getElementById("focusChart"),{
+
+type:"bar",
+
+data:{
+labels:participants,
+datasets:[{
+label:"Average Focus %",
+data:avgFocus,
+backgroundColor:"#22c55e"
+}]
+}
+
+})
+
+
+/* Distraction Chart */
+
+new Chart(document.getElementById("distractionChart"),{
+
+type:"bar",
+
+data:{
+labels:participants,
+datasets:[{
+label:"Average Distraction %",
+data:avgDistraction,
+backgroundColor:"#ef4444"
+}]
+}
+
+})
+
+
+/* Emotion Chart */
+
+new Chart(document.getElementById("emotionChart"),{
+
+type:"pie",
+
+data:{
+labels:Object.keys(emotionCount),
+
+datasets:[{
+data:Object.values(emotionCount),
+
+backgroundColor:[
+"#22c55e",
+"#ef4444",
+"#eab308",
+"#3b82f6",
+"#a855f7",
+"#f97316",
+"#14b8a6"
+]
+
+}]
+}
+
+})
+
+
+function downloadReport(){
+
+window.location = `/download-report/{{room_id}}`
+
+}
+
+</script>
+
+</body>
+</html>
