@@ -23,25 +23,34 @@ const JoinMeetingDialog = ({ open, onOpenChange }: Props) => {
     return;
   }
 
+  let meetingCode = code.trim();
+
+  // If user pasted full meeting link
+  if (meetingCode.includes("/")) {
+    const parts = meetingCode.split("/");
+    meetingCode = parts[parts.length - 1].split("?")[0];
+  }
+
   const userName = localStorage.getItem("username") || "Guest";
 
-  setActiveMeetingCode(code);
+  setActiveMeetingCode(meetingCode);
 
   addToHistory({
     id: crypto.randomUUID(),
-    title: `Meeting ${code}`,
+    title: `Meeting ${meetingCode}`,
     date: new Date().toLocaleDateString(),
     time: new Date().toLocaleTimeString(),
     duration: "—",
     participants: 1,
-    code,
+    code: meetingCode,
     type: "joined"
   });
 
   onOpenChange(false);
 
-  navigate(`/meeting/${code}?user=${userName}`);
+  window.location.href = `https://juan-exopathic-dayfly.ngrok-free.dev/meeting/${meetingCode}?name=${userName}`;
 };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center">
       <div className="bg-[#0f172a] p-6 rounded-xl w-[400px]">
