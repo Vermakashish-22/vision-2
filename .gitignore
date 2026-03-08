@@ -6,3 +6,4 @@ reports/
 *.png
 *.pdf
 node_modules/
+backend/temp_login.jpg
