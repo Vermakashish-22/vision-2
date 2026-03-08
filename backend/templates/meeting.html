@@ -177,8 +177,10 @@ class="control-btn bg-red-600 hover:bg-red-500">
 <div id="reportOverlay"
 class="hidden fixed inset-0 bg-black/60 backdrop-blur-md items-center justify-center z-50">
 
-<div class="bg-slate-900/80 backdrop-blur-xl border border-white/10
-rounded-xl p-6 w-[90%] h-[85%] overflow-y-auto">
+<div class="bg-slate-900/90 backdrop-blur-xl border border-white/10
+rounded-xl p-5 w-[85%] max-w-5xl max-h-[80vh] overflow-y-auto">
+</div>
+
 
 <div class="flex justify-between items-center mb-4">
 
@@ -188,17 +190,17 @@ rounded-xl p-6 w-[90%] h-[85%] overflow-y-auto">
 
 </div>
 
-<div class="grid grid-cols-2 gap-6">
+<div class="grid md:grid-cols-2 grid-cols-1 gap-6">
 
-<canvas id="focusChart"></canvas>
 
-<canvas id="distractionChart"></canvas>
+<canvas id="focusChart" class="max-h-[260px]"></canvas>
+<canvas id="distractionChart" class="max-h-[260px]"></canvas>
 
 </div>
 
 <div class="mt-6">
 
-<canvas id="emotionChart"></canvas>
+<canvas id="emotionChart" class="max-h-[320px]"></canvas>
 
 </div>
 
